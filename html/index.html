@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NetCheck</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+table {
+  color: #333;
+  font-family: sans-serif;
+  font-size: .9em;
+  font-weight: 300;
+  text-align: left;
+  line-height: 40px;
+  border-spacing: 0;
+  border: 1px solid #428bca;
+  width: 600px;
+  margin: 20px auto;
+}
+
+thead tr:first-child {
+  background: #428bca;
+  color: #fff;
+  border: none;
+}
+
+th {font-weight: bold;}
+th:first-child, td:first-child {padding: 0 15px 0 20px;}
+
+thead tr:last-child th {border-bottom: 2px solid #ddd;}
+
+tbody tr:hover {background-color: #f0fbff;}
+tbody tr:last-child td {border: none;}
+tbody td {border-bottom: 1px solid #ddd;}
+
+td:last-child {
+  text-align: right;
+  padding-right: 10px;
+}
+
+</style>
+<script src="jquery-1.11.1.min.js"></script>
+<script>
+$(document).ready(function(){
+	updatePage();	
+});
+
+function updatePage(){
+	if(getURLParameter('log')=="raw") {
+		$("#normal_table").hide();
+		$("#log_button").text("Switch to normal log");
+	} else {
+		$("#raw_table").hide();
+		$("#log_button").text("Switch to raw log");
+	}
+	$.getJSON("/status",function(status){
+		handleStatus(status);
+	});
+	$.getJSON("/log",function(log){
+		handleLog(log);
+	});
+}
+
+function handleStatus(status) {
+	if(status.connected) {
+		$(".toptitle").text("NetCheck - Connected");
+	}
+	else {
+		$(".toptitle").text("NetCheck - Not Connected");
+	}
+}
+
+function handleLog(log) {
+			if(getURLParameter('log')=="raw") {
+				$.each(log.reverse(), function(i, item){
+					addEvent(item);
+				});			
+			}
+			else {
+				firstStatusSet = false;
+				previousDate = "";
+				previousTime = "";
+				previousItem = {event:"",date:"",time:""};
+				$.each(log.reverse(), function(i, item){
+					if(firstStatusSet == false) {
+						if(item.event == "UP") {
+							addLogEntry(item.date, item.time, "Present", "",
+							            "Network is up", "#F5FFF5");
+							firstStatusSet = true;
+							previousDate = item.date;
+							previousTime = item.time;
+						}
+						else if(item.event == "DOWN") {
+							addLogEntry(item.date, item.time, "Present", "",
+							            "Network is down", "#FBB");
+							firstStatusSet = true;
+							previousDate = item.date;
+							previousTime = item.time;
+						}
+					}
+					else { 
+						if ((previousItem.event == "START") && (item.event != "END")){
+							addLogEntry(item.date, item.time, 
+										previousDate,previousTime,
+										"Unkown state (program crash)", 
+										"lightyellow");							
+							previousDate = item.date;
+							previousTime = item.time;							
+						}
+						else {
+							switch(item.event) {
+								case "UP" :
+									addLogEntry(item.date, item.time, 
+												previousDate,previousTime,
+												"Network was up", "#F5FFF5");
+									previousDate = item.date;
+									previousTime = item.time;
+									break;
+								case "DOWN" :
+									addLogEntry(item.date, item.time, 
+												previousDate,previousTime,
+												"Network was down", "#FBB");
+									previousDate = item.date;
+									previousTime = item.time;
+									break;
+								case "END" :
+									addLogEntry(item.date, item.time, 
+												previousDate,previousTime,
+												"Unknown state (program closed)", "lightyellow");
+									previousDate = item.date;
+									previousTime = item.time;
+									break;
+								default :
+							}
+						}
+					}
+					previousItem = item;
+				});	
+			}
+}
+
+function addEvent(item) {
+	switch(item.event) {
+		case "UP":
+			color = "#F5FFF5";
+			break;
+		case "DOWN":
+			color = "#FBB";
+			break;
+		case "ALIVE":
+			color = "white";
+			break;
+		case "CRASH":
+			color = "red";
+			break;
+		default:
+			color = "lightyellow"
+	}
+	
+	element = 	
+		'<tr style="background: '+color+';">    '+
+		'	<td>'+item.date+' '+item.time+'</td>'+
+		'	<td>'+item.event+'</td>             '+
+		'</tr>                                  ';
+			
+	$("#raw_entries").append(element);
+}
+
+function addLogEntry(startDate, startTime, endDate, endTime, text, color){
+	entry = 	
+		'<tr style="background: '+color+';">    '+
+		'	<td>'+startDate+' '+startTime+'</td>'+
+		'	<td>'+endDate+' '+endTime+'</td>    '+
+		'	<td>'+text+'</td>                   '+
+		'</tr>                                  ';
+	$("#normal_entries").append(entry);
+}
+
+function getURLParameter(name) {
+  return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null
+}
+
+function switchLog() {
+	if(getURLParameter('log')=="raw"){
+		location.href = location.href.split('?')[0];
+	}
+	else
+		location.href += '?log=raw';
+}
+
+</script>
+</head>
+<body>
+	<table id="normal_table">
+		<col style="width:30%">
+		<col style="width:30%">
+		<col style="width:40%">
+		<thead>
+			<tr>
+				<th colspan="3" class="toptitle">NetCheck</th>
+			</tr>
+			<tr>
+				<th>From</th>
+				<th>To</th>
+				<th>Activity</th>
+				<!--<th colspan="2">Activity</th>-->
+			</tr>
+		</thead>
+		<tbody id="normal_entries">
+			<!-- Log entries goes here -->
+		</tbody>
+	</table>
+	<table  id="raw_table">
+		<col style="width:80%">
+		<col style="width:20%">
+		<thead>
+			<tr>
+				<th colspan="2" class="toptitle">NetCheck</th>
+			</tr>
+			<tr>
+				<th>Time</th>
+				<th>Event</th>
+			</tr>
+		</thead>
+		<tbody id="raw_entries">
+			<!-- Log entries goes here -->
+		</tbody>
+	</table>
+	
+	<center>
+		<button onclick="switchLog();" id="log_button">Switch to raw log</button>
+		<button onclick="location.href='https://github.com/joel-a-eriksson/NetCheck';">About NetCheck</button>
+	</center>
+
+
+
+</body>
+</html>
